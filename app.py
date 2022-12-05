@@ -1,6 +1,6 @@
 from app.service import Extract
 
-text = "2 gün sonraya Eskişehir trenine 2 yetişkin"
+text = "2 gün sonraya gidip haftaya Eskişehir trenine 2 yetişkin"
 
 request_ = {"defaultLocation": "Ankara", 
             "text": f"{text}"} 

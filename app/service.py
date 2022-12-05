@@ -103,7 +103,7 @@ class Extract(Assemble, Obtain, Apply):
     def extract_dates(self, entities):
         
         dates = entities['dates']
-        weekdays = [self.weekday_list.index(weekday) for weekday in entities['weekdays']] # --> Datetime
+        weekdays = entities['weekdays']
         delays = entities['delays']
         sdelays = entities['sdelays']
         

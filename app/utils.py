@@ -56,9 +56,9 @@ class Format:
         formatted_date_string = datetime_object.strftime("%d-%m-%Y")
         return formatted_date_string
     
-    def format_weekdays(self, weekday_index):
-        #weekdays = [self.weekday_list.index(weekday) for weekday in entities['weekdays']]
-        weekdays = [(self.today + datetime.timedelta((index-self.today.weekday()) % 7)) for index in weekday_index]
+    def format_weekdays(self, weekdays):
+        weekday_indexes = [weekday_list.index(weekday) for weekday in weekdays]
+        weekdays = [(self.today + datetime.timedelta((index-self.today.weekday()) % 7)) for index in weekday_indexes]
         return weekdays
     
     def format_delays(self, delay):
@@ -79,9 +79,8 @@ class Format:
         if compare==False:
             for index, date in enumerate(dates):
                 dates[index] = self.today + date
-            return dates
                 
-        return sdelay_count
+        return dates
     
     def format_datetime(self, date):
         
@@ -108,9 +107,9 @@ class Compare(Format):
         date0 = response_content['date0']
         date1 = response_content['date1']
         if date0 != "" and date1 != "":
-            if date0 < date1:
+            if date0 > date1:
                 temp_date = date0
-                date0 = date0
+                date0 = date1
                 date1 = temp_date
                 
         if date0 != "": date0 = self.format_date_string(date0)
@@ -131,18 +130,23 @@ class Compare(Format):
         return weekdays
     
     def compare_delays(self, delays, sdelays):
-        if len(delays)==1 and len(sdelays)==1:
-            delay = delays[0]
-            sdelay = sdelays[0]
-            # Compare delay indexes Example: delay = ('haftaya',2) sdelay = (2,'gün sonraya',3)
-            #                                                   ^            ^               ^
-            #                                                 index     sdelay amount      index
-            if delay[1] < sdelay[2]:
-                date0 = self.format_delays(delay)
-                date1 = date0 + self.format_sdelay(sdelay, compare=True)             
-            else:
-                date0 = self.today + self.format_sdelay(sdelay, compare=True)
-                date1 = self.today + self.format_delays(delay)
+        delay = delays[0]
+        sdelay = sdelays[0]
+        # Compare delay indexes Example: delay = ('haftaya',2) sdelay = (2,'gün sonraya',3)
+        #                                                   ^            ^               ^
+        #                                                 index     sdelay amount      index
+        if delay[1] < sdelay[2]:
+            date0 = self.format_delays(delays)[0]
+            date1 = self.format_sdelays(sdelays, compare=True)[0]
+            date1 = date0 + date1
+
+            return date0, date1
+            
+        else:
+            date0= self.format_sdelays(sdelays)
+            date1 = self.format_delays(delays)
+
+            return date1, date0
 
 class Process(Compare):
     
@@ -244,7 +248,7 @@ class Process(Compare):
     
     def process_datetime(self, dates, weekdays, delays, sdelays):
     
-        if len(delays)==1 and len(sdelays)==1: delays, sdelays = self.compare_delays(self, delays, sdelays)
+        if len(delays)==1 and len(sdelays)==1: delays, sdelays = self.compare_delays(delays, sdelays)
 
         elif len(sdelays)==0: delays = self.format_delays(delays)
 
