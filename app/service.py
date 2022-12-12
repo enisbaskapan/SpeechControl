@@ -1,7 +1,6 @@
 from app.utils import Assemble, Obtain, Apply
 from app.nlp.vocabulary import *
 
-
 class Extract(Assemble, Obtain, Apply):
     """
     Extract information from the received request and return a url as a response
@@ -24,7 +23,7 @@ class Extract(Assemble, Obtain, Apply):
         self.response_content['Passengers'] = []
         
         self.response_content['no_stations'] = False
-        
+
         self.entity_list = {'DURAK':station_list,
                             'AY':month_list,
                             'YOLCU':passenger_list,
@@ -34,6 +33,10 @@ class Extract(Assemble, Obtain, Apply):
                             'SDELAY':s_delay_list,
                             'CİNSİYET':gender_list,
                             'SAYI':number_list}
+
+    #@property
+    #def extract_response_content_copy(self):
+
         
     def extract_entities(self, doc):
         
@@ -92,6 +95,10 @@ class Extract(Assemble, Obtain, Apply):
                     'passengers':passengers, 
                     'self':self_, 
                     'genders':genders}
+        
+        print('EXTRACT ENTITIES')
+        print(entities)
+        
         return entities
                 
     def extract_stations(self, entities, defaultLocation):
@@ -106,9 +113,15 @@ class Extract(Assemble, Obtain, Apply):
         weekdays = entities['weekdays']
         delays = entities['delays']
         sdelays = entities['sdelays']
+        print('EXTRACT DATE')
+        print(self.response_content)
         
         self.response_content = self.process_dates(dates, weekdays)
+        print(self.response_content)
         self.response_content = self.process_delays(delays, sdelays)
+
+        print(self.response_content)
+
         return self.response_content
     
     def extract_passengers(self, entities):
@@ -135,7 +148,9 @@ class Extract(Assemble, Obtain, Apply):
         
         self.response_content = self.compare_dates(self.response_content)
         self.response_content, self.response = self.process_available_stations(self.response_content, self.response)
+        
         self.response = self.assemble_url()
         self.response = self.process_url(self.response)
-        
+
         return self.response
+

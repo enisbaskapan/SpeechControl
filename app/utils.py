@@ -3,7 +3,6 @@ from spacy import load
 from app.nlp.lemmatizer import lemmatizeWord
 from app.nlp.vocabulary import *
 
-
 class Transform:
     
     def transform_station_tags(self, response_content):
@@ -46,6 +45,18 @@ class Transform:
             
         return response_content
 
+class Check:
+    
+    def check_date0(self, response_content):
+
+        if not response_content['date0']:
+            return True
+        else:
+            return False
+
+    def check_indexes(self):
+        pass
+            
 class Format:
     
     def __init__(self):
@@ -57,7 +68,9 @@ class Format:
         return formatted_date_string
     
     def format_weekdays(self, weekdays):
+        print('FORMAT WEEKDAYS')
         weekday_indexes = [weekday_list.index(weekday) for weekday in weekdays]
+        print(weekday_indexes)
         weekdays = [(self.today + datetime.timedelta((index-self.today.weekday()) % 7)) for index in weekday_indexes]
         return weekdays
     
@@ -82,6 +95,19 @@ class Format:
                 
         return dates
     
+    def format_date_object(self, date_object):
+        """
+        Convert datetime.date object into datetime.datetime object in order compute and compare dates
+        
+        Parameters
+        ----------
+        date_object: datetime.date
+            datetime.date object
+        
+        """
+        datetime_object = datetime.datetime.fromordinal(date_object.toordinal())
+        return datetime_object
+    
     def format_datetime(self, date):
         
         current_year = datetime.date.today().year
@@ -103,9 +129,23 @@ class Compare(Format):
         
         super().__init__()
 
+    def compare_today(self, date0, date1):
+
+        today = self.format_date_object(self.today)
+
+        if date0 != "" and date0 < today:
+            date0 = date0 + datetime.timedelta(days=365)
+        if date1 != "" and date1 < today:
+            date1 = date1 + datetime.timedelta(days=365)
+
+        return date0, date1
+
     def compare_dates(self, response_content):
+        print('COMPARE DATES')
+        print(response_content)
         date0 = response_content['date0']
         date1 = response_content['date1']
+        date0, date1 = self.compare_today(date0, date1)
         if date0 != "" and date1 != "":
             if date0 > date1:
                 temp_date = date0
@@ -121,7 +161,8 @@ class Compare(Format):
         return response_content
             
     def compare_weekdays(self, weekdays):
-        
+        print('COMPARE WEEKDAYS')
+        print(weekdays)
         weekdays = self.format_weekdays(weekdays)
    
         if len(weekdays) == 2 and weekdays[1] < weekdays[0]:
@@ -130,11 +171,14 @@ class Compare(Format):
         return weekdays
     
     def compare_delays(self, delays, sdelays):
+        """
+        Compare delay indexes Example: delay = ('haftaya',2) sdelay = (2,'gün sonraya',3)
+                                                          ^            ^               ^
+                                                         index     sdelay amount      index
+        """
         delay = delays[0]
         sdelay = sdelays[0]
-        # Compare delay indexes Example: delay = ('haftaya',2) sdelay = (2,'gün sonraya',3)
-        #                                                   ^            ^               ^
-        #                                                 index     sdelay amount      index
+
         if delay[1] < sdelay[2]:
             date0 = self.format_delays(delays)[0]
             date1 = self.format_sdelays(sdelays, compare=True)[0]
@@ -148,7 +192,7 @@ class Compare(Format):
 
             return date1, date0
 
-class Process(Compare):
+class Process(Compare, Check):
     
     def __init__(self):
         
@@ -156,39 +200,65 @@ class Process(Compare):
     
     def process_dates(self, dates, weekdays):
         
-        if len(dates)==2:
+        dates_length = len(dates)
+        weekdays_length = len(weekdays)
+        
+        if dates_length==2:
             self.response_content['date0'] = dates[0]
             self.response_content['date1'] = dates[1]
-        elif len(dates)==1 and len(weekdays)==0:
+        elif dates_length==1 and weekdays_length==0:
             self.response_content['date0'] = dates[0]
-        elif len(dates)==1 and len(weekdays)==1:
-            self.response_content['date0'] = weekdays[0]
-            self.response_content['date1'] = dates[1]
-        elif len(weekdays)==2:
-            self.response_content['date0'] = weekdays[0]
-            self.response_content['date1'] = weekdays[1]    
-        else:
-            tomorrow = datetime.date.today() + datetime.timedelta(days=1)
-            tomorrow = self.format_date_string(tomorrow)
-            self.response_content['date0'] = tomorrow
+        elif dates_length==1 and weekdays_length==1:
+            self.response_content['date0'] = self.format_date_object(weekdays[0])
+            self.response_content['date1'] = dates[0]
+        elif dates_length==0 and weekdays_length==1:
+            self.response_content['date0'] = self.format_date_object(weekdays[0])
+        elif weekdays_length==2:
+            self.response_content['date0'] = self.format_date_object(weekdays[0])
+            self.response_content['date1'] = self.format_date_object(weekdays[1])
+        
+        
+        
         return self.response_content
     
     def process_delays(self, delays, sdelays):
 
-        if len(delays)==2:
-            self.response_content['date0'] = delays[0]
-            self.response_content['date1'] = delays[1]
-        elif len(delays)==1 and len(sdelays)==0:
-            self.response_content['date0'] = delays[0]
-        elif len(delays)==0 and len(sdelays)==1:
-            self.response_content['date0'] = sdelays[0]
-        elif len(delays)==1 and len(sdelays)==1:
-            self.response_content['date0'] = delays[0]
-            self.response_content['date1'] = sdelays[0]
-        elif len(sdelays)==2:
-            self.response_content['date0'] = sdelays[0]
-            self.response_content['date1'] = sdelays[1]
+
         
+        if type(delays) != list: delays = [delays]
+        if type(sdelays) != list: sdelays = [sdelays]
+
+        boolean = self.check_date0(self.response_content)
+        print(boolean)
+        
+        delay_length = len(delays)
+        sdelay_length = len(sdelays)
+
+        if delay_length==2:
+            self.response_content['date0'] = self.format_date_object(delays[0])
+            self.response_content['date1'] = self.format_date_object(delays[1])
+        elif delay_length==1 and sdelay_length==0 and boolean:
+            self.response_content['date0'] = self.format_date_object(delays[0])
+        elif delay_length==1 and sdelay_length==0 and boolean == False:
+            self.response_content['date1'] = self.format_date_object(delays[0])
+        elif delay_length==0 and sdelay_length==1 and boolean:
+            self.response_content['date0'] = self.format_date_object(sdelays[0])
+        elif delay_length==0 and sdelay_length==1 and boolean==False:
+            self.response_content['date1'] = self.format_date_object(sdelays[0])
+        elif delay_length==1 and sdelay_length==1:
+            self.response_content['date0'] = self.format_date_object(delays[0])
+            self.response_content['date1'] = self.format_date_object(sdelays[0])
+        elif sdelay_length==2:
+            self.response_content['date0'] = self.format_date_object(sdelays[0])
+            self.response_content['date1'] = self.format_date_object(sdelays[1])
+        elif boolean:
+            tomorrow = datetime.date.today() + datetime.timedelta(days=1)
+            tomorrow = self.format_date_string(tomorrow)
+            self.response_content['date0'] = tomorrow
+            
+        print(self.response_content)
+        print('DELAYS')
+            
         return self.response_content
     
     def process_stations(self, stations, defaultLocation):
@@ -212,9 +282,6 @@ class Process(Compare):
             self.response_content['from1'] = To
             self.response_content['to1'] = From
             
-        elif len(stations) == 0:
-            self.response_content['no_stations'] = True
-            
         return self.response_content
                     
     def process_passengers(self, passengers):
@@ -230,11 +297,15 @@ class Process(Compare):
  
     def process_available_stations(self, response_content, response):
         
+        if response_content['from0'] == "" and response_content['from1'] == "": self.response_content['no_stations'] = True
+        else: self.response_content['no_stations'] = False
+        
         if response_content['no_stations']:
             response['exampleArrival']['stationList'] = list(station_vocab.keys())
             
-            
-        del response_content['no_stations']
+        
+        #del response_content['no_stations']
+        response_content.pop('no_stations')
         
         if response_content['from0'] == response_content['to0']:
             response['exampleArrival']['stationList'] = list(station_vocab.keys())
@@ -247,7 +318,9 @@ class Process(Compare):
         return response
     
     def process_datetime(self, dates, weekdays, delays, sdelays):
-    
+        print('PROCESS DATETIME')
+        print(dates, weekdays, delays, sdelays)
+        
         if len(delays)==1 and len(sdelays)==1: delays, sdelays = self.compare_delays(delays, sdelays)
 
         elif len(sdelays)==0: delays = self.format_delays(delays)
@@ -256,10 +329,8 @@ class Process(Compare):
 
         if len(dates)!=0: dates = self.format_dates(dates)
 
-        if len(weekdays)==2: weekdays = self.compare_weekdays(weekdays)
+        if len(weekdays)!=0: weekdays = self.compare_weekdays(weekdays)
         
-        if len(weekdays)!=0: weekdays = self.format_weekdays(weekdays)
-
         return dates, weekdays, delays, sdelays
 
 class Assemble(Process, Transform):
@@ -357,3 +428,8 @@ class Apply:
     def apply_lemmatization_model(self, word):
         lemmatized_word = lemmatizeWord(word)
         return lemmatized_word
+
+#utils --> process.py
+#      --> control.py compare check
+#      --> ml.py apply
+#      --> __init__.py
