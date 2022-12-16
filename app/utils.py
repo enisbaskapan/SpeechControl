@@ -254,15 +254,12 @@ class Process(Compare, Check):
         
         super().__init__()
         
-    def process_dates(self, dates, weekdays, delays, sdelays):
-        
-        date_types = [dates, weekdays, delays, sdelays]
-        
+    def process_dates(self, dates):
+    
         date_dict = {}
-        for date_type in date_types:
-            for date in date_type:
-                key = date[-2]
-                date_dict[key] = date
+        for date in dates:
+            key = date[-2]
+            date_dict[key] = date
                 
         if len(date_dict) !=0: self.response_content['date0'] = date_dict[min(date_dict.keys())]
         if len(date_dict) > 1: self.response_content['date1'] = date_dict[max(date_dict.keys())]
@@ -272,6 +269,8 @@ class Process(Compare, Check):
         
         if len(stations) == 2:
             From, To = stations
+            From = From[0]
+            To = To[0]
             self.response_content['from0'] = From
             self.response_content['to0'] = To
             
@@ -282,7 +281,7 @@ class Process(Compare, Check):
             
             # Assign default_location as the departure location that is retrieved from0 GPS
             From, To = defaultLocation, stations[0]
-
+            To = To[0]
             self.response_content['from0'] = From
             self.response_content['to0'] = To
             
@@ -359,58 +358,92 @@ class Assemble(Process, Transform):
         self.response['url'] = link 
         return self.response
     
+    def assemble_entities(self, entities, final_entities):
+        
+        for entity in entities:
+            if entity[-1] != "":
+                final_entities.append(entity)
+        
+        return final_entities
+        
+    
 class Obtain:
     
-    def obtain_date_indexes(self, months, numbers):
-        
-        dates = []
-        for month in months:
-            for number in numbers:
-                if month[1]-1==number[1]:
-                    dates.append((number[0],month[0],month[1],month[2]))
-                    numbers.remove(number)
-                elif month[1]+1==number[1]:
-                    dates.append((number[0],month[0],month[1],month[2]))
-                    numbers.remove(number)
+    def obtain_dates(self, entities, final_entities):
+
+        for index, entity in enumerate(entities):
+            name = entity[0]
+            label = entity[-1]
+            prev = index-1
+            next_ = index+1
+            if label == 'AY':
+                if index > 0 and entities[prev][2] == 'SAYI':
+                    final_entities.append((entities[prev][0], name, index, label))
+                    entities.pop(prev)
+                    entities.insert(prev,("","",""))
+                    entities.pop(index)
+                    entities.insert(index,("","",""))
+                elif index < len(entities)-1 and entities[next_][2] == 'SAYI':
+                    final_entities.append((entities[next_][0], name, index, label))
+                    entities.pop(next_)
+                    entities.insert(next_,("","",""))
+                    entities.pop(index)
+                    entities.insert(index,("","",""))
                     
-        return dates, numbers
+        return entities, final_entities
 
-    def obtain_passenger_indexes(self, passenger_types, numbers):
+    def obtain_sdelays(self, entities, final_entities):
 
-        passengers = []
-        for passenger in passenger_types:
-            
-            if len(numbers) == 0: passengers.append((1,passenger[0]))
-           
-            for number in numbers:
-                if passenger[1]-1==number[1]:
-                    passengers.append((number[0],passenger[0]))
-                    numbers.remove(number)
+        for index, entity in enumerate(entities):
+            name = entity[0]
+            label = entity[-1]
+            prev = index-1
+            next_ = index+1
+            if label == 'SDELAY':
+                if index > 0 and entities[prev][2] == 'SAYI':
+                    final_entities.append((entities[prev][0], name, index, label))
+                    entities.pop(prev)
+                    entities.insert(prev,("","",""))
+                    entities.pop(index)
+                    entities.insert(index,("","",""))
+                elif index < len(entities)-1 and entities[next_][2] == 'SAYI':
+                    final_entities.append((entities[next_][0], name, index, label))
+                    entities.pop(next_)
+                    entities.insert(next_,("","",""))
+                    entities.pop(index)
+                    entities.insert(index,("","",""))
+
+        return entities, final_entities
+
+    def obtain_passengers(self, entities, final_entities):
+
+        for index, entity in enumerate(entities):
+            name = entity[0]
+            label = entity[-1]
+            prev = index-1
+            if label == 'YOLCU':
+                if index > 0 and entities[prev][2] == 'SAYI':
+                    final_entities.append((entities[prev][0], name))
+                    entities.pop(prev)
+                    entities.insert(prev,("","",""))
+                    entities.pop(index)
+                    entities.insert(index,("","",""))
+                else:
+                    final_entities.append((1, name))
+                    
+            if label == 'SELF':
+                final_entities.append((1, name))
                 
-            
-        return passengers
+        return entities, final_entities
     
-    def obtain_sdelay_indexes(self, sdelays, numbers):
+    def obtain_indexes(self, entities):
         
-        s_delays = []
-        for delay in sdelays:
-            for number in numbers:
-                if delay[1]-1==number[1]:
-                    s_delays.append((number[0],delay[0],delay[1],delay[2]))
-                    numbers.remove(number)
-                    
-        return s_delays, numbers
-    
-    def obtain_indexes(self, dates, passengers, sdelays, numbers):
-        
-        if len(dates) != 0:
-            dates, numbers = self.obtain_date_indexes(dates, numbers)
-        if len(sdelays) != 0:
-            sdelays, numbers = self.obtain_sdelay_indexes(sdelays, numbers)
-        if len(passengers) != 0:
-            passengers = self.obtain_passenger_indexes(passengers, numbers)
-        
-        return dates, passengers, sdelays
+        final_entities = []
+        entities, final_entities = self.obtain_dates(entities, final_entities)
+        entities, final_entities = self.obtain_sdelays(entities, final_entities)
+        entities, final_entities = self.obtain_passengers(entities, final_entities)
+
+        return entities, final_entities
     
 class Apply:
     

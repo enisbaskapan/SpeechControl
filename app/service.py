@@ -36,19 +36,10 @@ class Extract(Assemble, Obtain, Apply):
 
     #@property
     #def extract_response_content_copy(self):
-
         
     def extract_entities(self, doc):
         
-        stations = []
-        months = []
-        passenger_types = []
-        weekdays = []
-        self_ = []
-        delays = []
-        s_delays = []
-        genders = []
-        numbers = []
+        entities = []
         
         for index, ent in enumerate(doc.ents):
             label = ent.label_
@@ -65,63 +56,30 @@ class Extract(Assemble, Obtain, Apply):
             if label != 'DURAK' and label != 'AY':
                 ent = str(ent).lower()
                 
-            if str(ent) in ent_list:
-                if label == 'DURAK': stations.append(str(ent)) 
-
-                if label == 'AY': months.append((str(ent),index,label))
-
-                if label == 'YOLCU': passenger_types.append((str(ent),index)) 
-
-                if label == 'GÜN': weekdays.append(str(ent)) 
-
-                if label == 'SELF': self_.append(str(ent)) 
+            if str(ent) in ent_list: entities.append((str(ent), index, label))   
                 
-                if label == 'DELAY': delays.append((str(ent),index,label))
-
-                if label == 'SDELAY': s_delays.append((str(ent),index,label))
-                
-                if label == 'CİNSİYET': genders.append((str(ent),index)) 
-                
-                if label == 'SAYI': numbers.append((int(str(ent)),index))   
-                
-        dates, passengers, sdelays = self.obtain_indexes(months, passenger_types, s_delays, numbers)        
-        
-        entities = {'station':stations, 
-                    'dates':dates, 
-                    'weekdays':weekdays, 
-                    'delays':delays,
-                    'sdelays':sdelays, 
-                    'passengers':passengers, 
-                    'self':self_, 
-                    'genders':genders}
-        
-        return entities
+        entities, final_entities = self.obtain_indexes(entities) 
+        final_entities = self.assemble_entities(entities, final_entities)
+        return final_entities
                 
     def extract_stations(self, entities, defaultLocation):
         
-        stations = entities['station']
+        stations = [station for station in entities if station[-1]=='DURAK']
+        entities = [entity for entity in entities if entity not in stations]
         self.response_content = self.process_stations(stations, defaultLocation)
-        return self.response_content
+        return self.response_content, entities
             
     def extract_dates(self, entities):
         
-        dates = entities['dates']
-        weekdays = entities['weekdays']
-        delays = entities['delays']
-        sdelays = entities['sdelays']
-       
-        self.response_content = self.process_dates(dates, weekdays, delays, sdelays)
-
-        return self.response_content
+        dates = [date for date in entities if len(date) > 2]
+        entities = [entity for entity in entities if entity not in dates]
+        self.response_content = self.process_dates(dates)
+        return self.response_content, entities
     
     def extract_passengers(self, entities):
         
-        passengers = entities['passengers']
-        self_ = entities['self']
-        genders = entities['genders']
-        
+        passengers = entities
         self.response_content = self.process_passengers(passengers)
-        self.response_content = self.process_self(self_)
         return self.response_content
         
     def extract(self, request_): 
@@ -132,13 +90,12 @@ class Extract(Assemble, Obtain, Apply):
         doc = self.apply_ner_model(text)
         entities = self.extract_entities(doc)
         
-        self.response_content = self.extract_dates(entities)
-        self.response_content = self.extract_stations(entities, defaultLocation)
+        self.response_content, entities = self.extract_stations(entities, defaultLocation)
+        self.response_content, entities = self.extract_dates(entities)
         self.response_content = self.extract_passengers(entities)
         
         self.response_content = self.compare_dates(self.response_content)
         self.response_content, self.response = self.process_available_stations(self.response_content, self.response)
-        
         self.response = self.assemble_url()
         self.response = self.process_url(self.response)
 
