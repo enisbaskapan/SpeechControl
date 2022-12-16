@@ -68,7 +68,7 @@ class Extract(Assemble, Obtain, Apply):
             if str(ent) in ent_list:
                 if label == 'DURAK': stations.append(str(ent)) 
 
-                if label == 'AY': months.append((str(ent),index))
+                if label == 'AY': months.append((str(ent),index,label))
 
                 if label == 'YOLCU': passenger_types.append((str(ent),index)) 
 
@@ -76,16 +76,15 @@ class Extract(Assemble, Obtain, Apply):
 
                 if label == 'SELF': self_.append(str(ent)) 
                 
-                if label == 'DELAY': delays.append((str(ent),index))
+                if label == 'DELAY': delays.append((str(ent),index,label))
 
-                if label == 'SDELAY': s_delays.append((str(ent),index))
+                if label == 'SDELAY': s_delays.append((str(ent),index,label))
                 
                 if label == 'CİNSİYET': genders.append((str(ent),index)) 
                 
                 if label == 'SAYI': numbers.append((int(str(ent)),index))   
                 
         dates, passengers, sdelays = self.obtain_indexes(months, passenger_types, s_delays, numbers)        
-        dates, weekdays, delays, sdelays = self.process_datetime(dates, weekdays, delays, sdelays)
         
         entities = {'station':stations, 
                     'dates':dates, 
@@ -95,9 +94,6 @@ class Extract(Assemble, Obtain, Apply):
                     'passengers':passengers, 
                     'self':self_, 
                     'genders':genders}
-        
-        print('EXTRACT ENTITIES')
-        print(entities)
         
         return entities
                 
@@ -113,14 +109,8 @@ class Extract(Assemble, Obtain, Apply):
         weekdays = entities['weekdays']
         delays = entities['delays']
         sdelays = entities['sdelays']
-        print('EXTRACT DATE')
-        print(self.response_content)
-        
-        self.response_content = self.process_dates(dates, weekdays)
-        print(self.response_content)
-        self.response_content = self.process_delays(delays, sdelays)
-
-        print(self.response_content)
+       
+        self.response_content = self.process_dates(dates, weekdays, delays, sdelays)
 
         return self.response_content
     
