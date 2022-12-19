@@ -30,10 +30,10 @@ class Transform:
                 #yolcu tipinin bulunduğu liste
                 if passenger[1] in types:
                     passenger_tag = tag
-                    passenger_count = passenger[0]
+                    passenger_count = int(passenger[0])
                     #eğer yolcu tagi listede varsa yolcu sayısını üstüne ekle
                     if passenger_tag in passenger_types.keys():
-                        passenger_types[passenger_tag] += passenger_count
+                        passenger_types[passenger_tag] += int(passenger_count)
                     #yeni bir tagse yeni yolcu ekle
                     else:
                         passenger_types[passenger_tag] = passenger_count
@@ -58,9 +58,33 @@ class Format:
     def format_weekdays(self, weekday):
 
         weekday_index = weekday_list.index(weekday[0])
-        weekdays = self.today + datetime.timedelta((weekday_index-self.today.weekday()) % 7)
-        return weekdays
+        weekday = self.today + datetime.timedelta((weekday_index-self.today.weekday()) % 7)
+        return weekday
     
+    def format_next_weekday(self, date, weekday_index):
+        
+        days_ahead = weekday_index - date.weekday()
+        if days_ahead <= 0:
+            days_ahead += 7
+        return date + datetime.timedelta(days_ahead)
+    
+    def format_weekday_delay(self, weekday):
+        
+        today = self.format_date_object(self.today)
+        next_monday = self.format_next_weekday(today, 0)
+        next_monday = self.format_date_object(next_monday)
+        
+        weekday_index = weekday_list.index(weekday[0])
+        weekday = self.format_weekdays(weekday)
+        weekday = self.format_date_object(weekday)
+
+        if weekday < next_monday:
+            weekday = self.format_next_weekday(next_monday, weekday_index)
+        else:
+            weekday = weekday
+
+        return weekday
+
     def format_tomorrow(self):
         
         tomorrow = datetime.date.today() + datetime.timedelta(days=1)
@@ -148,13 +172,34 @@ class Check(Format):
 
         super().__init__()
         
-    def check_date0(self, response_content):
+    def check_year(self, date):
+        
+        # Get the date of last month
+        last_month = self.today - datetime.timedelta(days=30)
+        last_month = self.format_date_object(last_month)
+        today = self.format_date_object(self.today)
+        
+        if last_month < date < today: self.response_content['invalid_date'] = True
+        elif date < last_month: date = date + datetime.timedelta(days=365) 
 
-        if not response_content['date0']:
-            return True
-        else:
-            return False
-
+        return date
+    
+    def check_if_date_exists(self, date):
+        
+        if date != "":
+            date = self.format_date_object(date)
+            date = self.check_year(date)
+            
+        return date
+            
+    def check_weekday(self, date0, date1, label):
+        
+        if label == 'GÜN':
+            if date1 < date0:
+                weekday_index = date1.weekday()
+                date1 = self.format_next_weekday(date0, weekday_index)
+        return date1
+            
     def check_return(self, response_content):
 
         if not response_content['date1']:
@@ -176,11 +221,26 @@ class Check(Format):
         
         elif label0 == 'SDELAY':
             date0 = self.today + self.format_labels(date0)
-            date1 = self.format_labels(date1)
-
+            date1 = self.format_labels(date1)  
+            date1 = self.check_weekday(date0, date1, label1)
+            
+        elif label0 == 'DELAY' and label1 == 'GÜN':
+            index0 = date0[-2]
+            index1 = date1[-2]
+            if index1 - index0 == 1:
+                delay_text = date0[0].lower()
+                date0 = date1
+                date1 = ""
+                
+                if delay_text == 'haftaya':
+                    date0 = self.format_weekday_delay(date0)
+                else:
+                    date0 = self.format_labels(date0)
         else:
             date0 = self.format_labels(date0)
             date1 = self.format_labels(date1)
+            date1 = self.check_weekday(date0, date1, label1)
+            
         return date0, date1
     
     def check_date_index(self, date0):
@@ -200,17 +260,6 @@ class Compare(Check):
         
         super().__init__()
 
-    def compare_today(self, date0, date1):
-
-        today = self.format_date_object(self.today)
-
-        if date0 != "" and date0 < today:
-            date0 = date0 + datetime.timedelta(days=365)
-        if date1 != "" and date1 < today:
-            date1 = date1 + datetime.timedelta(days=365)
-
-        return date0, date1
-
     def compare_dates(self, response_content):
         
         date0 = response_content['date0']
@@ -219,11 +268,13 @@ class Compare(Check):
         
         if return_date:
             date0, date1 = self.check_date_indexes(date0, date1)
-            date0 = self.format_date_object(date0)
-            date1 = self.format_date_object(date1)
+            date0 = self.check_if_date_exists(date0)
+            date1 = self.check_if_date_exists(date1)
+            
         else:
             date0 = self.check_date_index(date0)
-            date0 = self.format_date_object(date0)
+            date0 = self.check_if_date_exists(date0)
+            
         # If date0 and date1 not empty,
         if date0 and date1:
             if date0 > date1:
@@ -303,24 +354,31 @@ class Process(Compare, Check):
  
     def process_available_stations(self, response_content, response):
         
-        if response_content['from0'] == "" and response_content['from1'] == "": self.response_content['no_stations'] = True
-        else: self.response_content['no_stations'] = False
+        if response_content['from0'] == "" and response_content['from1'] == "": response_content['no_stations'] = True
+        #else: response_content['no_stations'] = False
         
         if response_content['no_stations']:
             response['exampleArrival']['stationList'] = list(station_vocab.keys())
             
         
         #del response_content['no_stations']
-        response_content.pop('no_stations')
+        #response_content.pop('no_stations')
         
         if response_content['from0'] == response_content['to0']:
             response['exampleArrival']['stationList'] = list(station_vocab.keys())
             
         return response_content, response
     
-    def process_url(self, response):
-        if response['exampleArrival']["stationList"] != [""]:
+    
+    
+    def process_url(self, response_content, response):
+        
+        if response_content['no_stations']:
             response['url'] = ""
+            
+        if response_content['invalid_date']:
+            response['url'] = ""
+        
         return response
 
 class Assemble(Process, Transform):
@@ -334,11 +392,15 @@ class Assemble(Process, Transform):
         #self.response['exampleDeparture'] = {}
         self.response['exampleArrival'] = {}
         
+        self.response['validDate'] = {}
+        
         #self.response['exampleDeparture']["message"] = "Lütfen gitmek istediğiniz durağı belirtin."
         #self.response['exampleDeparture']["stationList"] = [""]
         
         self.response['exampleArrival']["message"] = "Lütfen geçerli bir durak belirtiniz."
         self.response['exampleArrival']["stationList"] = [""]
+        
+        self.response['validDate']["message"] = "Lütfen geçerli bir tarih belirtiniz."
         
         self.response['url'] = ""
     
@@ -351,7 +413,8 @@ class Assemble(Process, Transform):
         link = "/availability?"
 
         for key, value in self.response_content.items():
-            link = link+key+"="+value+"&"
+            if type(value) != bool:
+                link = link+key+"="+value+"&"
             
         #linkteki son & işaretini alma
         link = link[:-1]
@@ -433,6 +496,8 @@ class Obtain:
                     
             if label == 'SELF':
                 final_entities.append((1, name))
+                entities.pop(index)
+                entities.insert(index,("","",""))
                 
         return entities, final_entities
     

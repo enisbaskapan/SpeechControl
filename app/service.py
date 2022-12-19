@@ -23,6 +23,7 @@ class Extract(Assemble, Obtain, Apply):
         self.response_content['Passengers'] = []
         
         self.response_content['no_stations'] = False
+        self.response_content['invalid_date'] = False
 
         self.entity_list = {'DURAK':station_list,
                             'AY':month_list,
@@ -58,8 +59,9 @@ class Extract(Assemble, Obtain, Apply):
                 
             if str(ent) in ent_list: entities.append((str(ent), index, label))   
                 
-        entities, final_entities = self.obtain_indexes(entities) 
+        entities, final_entities = self.obtain_indexes(entities)
         final_entities = self.assemble_entities(entities, final_entities)
+        
         return final_entities
                 
     def extract_stations(self, entities, defaultLocation):
@@ -74,6 +76,7 @@ class Extract(Assemble, Obtain, Apply):
         dates = [date for date in entities if len(date) > 2]
         entities = [entity for entity in entities if entity not in dates]
         self.response_content = self.process_dates(dates)
+        
         return self.response_content, entities
     
     def extract_passengers(self, entities):
@@ -97,7 +100,7 @@ class Extract(Assemble, Obtain, Apply):
         self.response_content = self.compare_dates(self.response_content)
         self.response_content, self.response = self.process_available_stations(self.response_content, self.response)
         self.response = self.assemble_url()
-        self.response = self.process_url(self.response)
+        self.response = self.process_url(self.response_content, self.response)
 
         return self.response
 
